@@ -3,9 +3,9 @@
  * @param {number} id The id of the space
  * @description A space on the board
  * @property {number} id The id of the space
- * @property {Space[]} adjacent The adjacent spaces
- * @property {[{ jump: Space, land: Space}]} targets The spaces that can be reached from the current space
- * @property {Space[]} targetedBy The spaces that can target the current space
+ * @property {number[]} adjacent The adjacent spaces
+ * @property {[{ jump: number, land: number}]} targets The spaces that can be reached from the current space
+ * @property {number[]} targetedBy The spaces that can target the current space
  * @property {boolean} occupied Whether the space is occupied
  * @method {boolean} isOccupied Returns whether the space is occupied
  * @method {void} fill Fills the space
@@ -60,7 +60,7 @@ class Space {
   }
 
   /**
-   * @param {Space} space The space to add as adjacent
+   * @param {string} space The space to add as adjacent
    * @description Adds a space as adjacent to the current space
    * @returns {void}
    * @memberof Space
@@ -72,7 +72,7 @@ class Space {
   }
 
   /**
-   * @returns {Space[]} The adjacent spaces
+   * @returns {string[]} The adjacent spaces
    * @description Returns the adjacent spaces
    * @memberof Space
    * @method
@@ -82,21 +82,20 @@ class Space {
     return this.adjacent
   }
 
-  /**
-   * @param {Space} jump The space to jump to
-   * @param {Space} land The space to land on
-   * @returns {void}
-   * @description Sets the space as target
-   * @memberof Board
-   * @method
-   * @name setTarget
-   */
-  setTarget(jump, land) {
+ /**
+  * @param {string} jump The space to jump to
+  * @param {string} land The space to land on
+  * @returns {void}
+  * @description Sets the space as target
+  * @memberof Space
+  * @method
+  */
+  addTarget(jump, land) {
     this.targets.push({ jump, land })
   }
 
   /**
-   * @returns {[{ jump: Space, land: Space}]} The targets
+   * @returns {[{ jump: string, land: string}]} The targets
    * @description Returns the targets for the space
    * @memberof Board
    * @method
@@ -107,19 +106,19 @@ class Space {
   }
 
   /**
-   * @param {Space} space The space to add as targeted
+   * @param {string} space The space to add as targeted
    * @returns {void}
    * @description Adds a space as targeted
    * @memberof Space
    * @method
    * @name addTargeted
    */
-  setTargetedBy(space) {
+  addTargetedBy(space) {
     this.targetedBy.push(space)
   }
 
   /**
-   * @returns {Space[]} The targeted spaces
+   * @returns {string[]} The targeted spaces
    * @description Returns spaces that can target the current space
    * @memberof Space
    * @method
@@ -213,8 +212,8 @@ class Board {
    * @name setAdjacent
    */
   setAdjacent(firstSpace, secondSpace) {
-    firstSpace.addAdjacent(secondSpace)
-    secondSpace.addAdjacent(firstSpace)
+    firstSpace.addAdjacent(secondSpace.id)
+    secondSpace.addAdjacent(firstSpace.id)
   }
 
   /**
@@ -227,11 +226,11 @@ class Board {
    * @method
    * @name setTarget
    */
-  setTarget(space, jumpSpace, landSpace) {
-    space.setTarget(jumpSpace, landSpace)
-    space.setTargetedBy(landSpace)
-    landSpace.setTarget(jumpSpace, space)
-    landSpace.setTargetedBy(space)
+  addTarget(space, jumpSpace, landSpace) {
+    space.addTarget(jumpSpace.id, landSpace.id)
+    space.addTargetedBy(landSpace.id)
+    landSpace.addTarget(jumpSpace.id, space.id)
+    landSpace.addTargetedBy(space.id)
   }
 
   /**
@@ -247,13 +246,13 @@ class Board {
     const spaceIsOccupied = space.isOccupied()
     const spaceTargets = space.getTargets()
     const targetId = target.id
-    const isValidTarget = spaceTargets.find(space => space.land.id === targetId)
+    const isValidTarget = spaceTargets.find(space => space.land === targetId) !== undefined
     const isTargetEmpty = !target.isOccupied()
-    /** 
+    const jumpSpaceId = spaceTargets.find(space => space.land === targetId).jump
+    /**
      * @type {Space}
      */
-    const jumpSpace = spaceTargets.find(space => space.land.id === targetId).jump
-
+    const jumpSpace = this.getSpace(jumpSpaceId);
     const isJumpSpaceOccupied = jumpSpace.isOccupied()
 
     return spaceIsOccupied && isValidTarget && isTargetEmpty && isJumpSpaceOccupied
@@ -273,9 +272,9 @@ class Board {
     /** 
      * @type {Space}
      */
-    const jumpSpace = space.getTargets().find(space => space.land.id === target.id).jump
+    const jumpSpace = this.getSpace(space.getTargets().find(space => space.land === target.id).jump)
 
-    if (isValidJump) {
+    if (isValidJump) { 
       this.setEmpty(space)
       this.setEmpty(jumpSpace)
       this.setOccupied(target)
@@ -307,6 +306,18 @@ class Board {
   }
 
   /**
+   * @param {Space[]} spaces The spaces to set
+   * @returns {void}
+   * @description Sets the spaces
+   * @memberof Board
+   * @method
+   * @name setSpaces
+   */
+  setSpaces(spaces) {
+    this.spaces = spaces
+  }
+
+  /**
    * @returns {[{ jump: Space, land: Space}]} The valid moves
    * @description Returns the valid moves
    * @memberof Board
@@ -323,10 +334,14 @@ class Board {
 
       // For each space targeting the empty space, check if the jump is valid
       for (const targetingSpace of targetedBy) {
-        const isValidJump = this.validateJump(targetingSpace, emptySpace)
+        const isValidJump = this.validateJump(this.getSpace(targetingSpace), emptySpace)
 
         if (isValidJump) {
-          validMoves.push({ jump: targetingSpace, land: emptySpace })
+          // Only push the jump if there isn't already an identical jump
+          const alreadyExists = validMoves.find(move => move.jump === targetingSpace && move.land === emptySpace.id) !== undefined
+          if (!alreadyExists) {
+            validMoves.push({ jump: targetingSpace, land: emptySpace.id })
+          }
         }
       }
     }
@@ -338,14 +353,23 @@ class Board {
 /**
  * @class StandardBoard
  * @extends Board
+ * @property {[]} history The history of moves
  * @description A standard board
  * @method {void} createBoard Creates the board
  */
 class StandardBoard extends Board{
   constructor() {
     super()
+    this.history = []
   }
 
+  /**
+   * @description Creates the standard board
+   * @returns {void}
+   * @memberof StandardBoard
+   * @method
+   * @name createBoard
+   */
   createBoard() {
     // A standard board has 15 spaces and is triangle shaped with 5 spaces on the bottom row and 1 space on the top row
     // The spaces are numbered from 1 to 15 starting from the top left and going left to right, top to bottom
@@ -423,45 +447,45 @@ class StandardBoard extends Board{
 
     // First row
     // 1 can over 2 to 4 and 3 to 6
-    this.setTarget(this.getSpace(1), this.getSpace(2), this.getSpace(4))
-    this.setTarget(this.getSpace(1), this.getSpace(3), this.getSpace(6))
+    this.addTarget(this.getSpace(1), this.getSpace(2), this.getSpace(4))
+    this.addTarget(this.getSpace(1), this.getSpace(3), this.getSpace(6))
 
     // Second row
     // 2 can jump over 4 to 7 and 5 to 9
-    this.setTarget(this.getSpace(2), this.getSpace(4), this.getSpace(7))
-    this.setTarget(this.getSpace(2), this.getSpace(5), this.getSpace(9))
+    this.addTarget(this.getSpace(2), this.getSpace(4), this.getSpace(7))
+    this.addTarget(this.getSpace(2), this.getSpace(5), this.getSpace(9))
     // 3 can jump over 5 to 8 and 6 to 10
-    this.setTarget(this.getSpace(3), this.getSpace(5), this.getSpace(8))
-    this.setTarget(this.getSpace(3), this.getSpace(6), this.getSpace(10))
+    this.addTarget(this.getSpace(3), this.getSpace(5), this.getSpace(8))
+    this.addTarget(this.getSpace(3), this.getSpace(6), this.getSpace(10))
 
     // Third row
     // 4 can jump over 2 to 1, 5 to 6, 7 to 11, and 8 to 13
-    this.setTarget(this.getSpace(4), this.getSpace(5), this.getSpace(6))
-    this.setTarget(this.getSpace(4), this.getSpace(7), this.getSpace(11))
-    this.setTarget(this.getSpace(4), this.getSpace(8), this.getSpace(13))
+    this.addTarget(this.getSpace(4), this.getSpace(5), this.getSpace(6))
+    this.addTarget(this.getSpace(4), this.getSpace(7), this.getSpace(11))
+    this.addTarget(this.getSpace(4), this.getSpace(8), this.getSpace(13))
     // 5 can jump over 8 to 12 and 9 to 14
-    this.setTarget(this.getSpace(5), this.getSpace(8), this.getSpace(12))
-    this.setTarget(this.getSpace(5), this.getSpace(9), this.getSpace(14))
+    this.addTarget(this.getSpace(5), this.getSpace(8), this.getSpace(12))
+    this.addTarget(this.getSpace(5), this.getSpace(9), this.getSpace(14))
     // 6 can jump over 3 to 1, 5 to 4, 9 to 13, and 10 to 15
-    this.setTarget(this.getSpace(6), this.getSpace(5), this.getSpace(4))
-    this.setTarget(this.getSpace(6), this.getSpace(9), this.getSpace(13))
-    this.setTarget(this.getSpace(6), this.getSpace(10), this.getSpace(15))
+    this.addTarget(this.getSpace(6), this.getSpace(5), this.getSpace(4))
+    this.addTarget(this.getSpace(6), this.getSpace(9), this.getSpace(13))
+    this.addTarget(this.getSpace(6), this.getSpace(10), this.getSpace(15))
 
     // Fourth row
     // 7 can jump over 4 to 2 and 8 to 9
-    this.setTarget(this.getSpace(7), this.getSpace(8), this.getSpace(9))
+    this.addTarget(this.getSpace(7), this.getSpace(8), this.getSpace(9))
     // 8 can jump over 5 to 3 and 9 to 10
-    this.setTarget(this.getSpace(8), this.getSpace(9), this.getSpace(10))
+    this.addTarget(this.getSpace(8), this.getSpace(9), this.getSpace(10))
     // 9 can jump over 5 to 2 and 8 to 7 but these have already been set
     // 10 can jump over 6 to 3 and 9 to 8 but these have already been set
 
     // Fifth row
     // 11 can jump over 7 to 4 and 12 to 13
-    this.setTarget(this.getSpace(11), this.getSpace(12), this.getSpace(13))
+    this.addTarget(this.getSpace(11), this.getSpace(12), this.getSpace(13))
     // 12 can jump over 8 to 5 and 13 to 14
-    this.setTarget(this.getSpace(12), this.getSpace(13), this.getSpace(14))
+    this.addTarget(this.getSpace(12), this.getSpace(13), this.getSpace(14))
     // 13 can jump over 8 to 4, 9 to 5, 12 to 11, and 14 to 15
-    this.setTarget(this.getSpace(13), this.getSpace(14), this.getSpace(15))
+    this.addTarget(this.getSpace(13), this.getSpace(14), this.getSpace(15))
     // 14 can jump over 9 to 5 and 13 to 12 but these have already been set
     // 15 can jump over 10 to 6 and 14 to 13 but these have already been set
   }
@@ -474,6 +498,17 @@ class StandardBoard extends Board{
    * @name printBoard
    */
   printBoard() {
+    console.log(this.toString())
+  }
+
+  /**
+   * @description Returns the board as a string
+   * @returns {string} The board as a string
+   * @memberof StandardBoard
+   * @method
+   * @name toString
+   */
+  toString() {
     const spaces = this.getSpaces()
     const emptySpace = 'O'
     const occupiedSpace = '*'
@@ -486,25 +521,105 @@ class StandardBoard extends Board{
     }
 
     // First row
-    console.log(space.repeat(4) + spaceStatuses[1] + space.repeat(4))
+    let board = space.repeat(4) + spaceStatuses[1] + space.repeat(4) + '\n'
 
     // Second row
-    console.log(space.repeat(3) + spaceStatuses[2] + space.repeat(1) + spaceStatuses[3] + space.repeat(3))
+    board += space.repeat(3) + spaceStatuses[2] + space.repeat(1) + spaceStatuses[3] + space.repeat(3) + '\n'
 
     // Third row
-    console.log(space.repeat(2) + spaceStatuses[4] + space.repeat(1) + spaceStatuses[5] + space.repeat(1) + spaceStatuses[6] + space.repeat(2))
+    board += space.repeat(2) + spaceStatuses[4] + space.repeat(1) + spaceStatuses[5] + space.repeat(1) + spaceStatuses[6] + space.repeat(2) + '\n'
 
     // Fourth row
-    console.log(space.repeat(1) + spaceStatuses[7] + space.repeat(1) + spaceStatuses[8] + space.repeat(1) + spaceStatuses[9] + space.repeat(1) + spaceStatuses[10] + space.repeat(1))
+    board += space.repeat(1) + spaceStatuses[7] + space.repeat(1) + spaceStatuses[8] + space.repeat(1) + spaceStatuses[9] + space.repeat(1) + spaceStatuses[10] + space.repeat(1) + '\n'
 
     // Fifth row
-    console.log(spaceStatuses[11] + space.repeat(1) + spaceStatuses[12] + space.repeat(1) + spaceStatuses[13] + space.repeat(1) + spaceStatuses[14] + space.repeat(1) + spaceStatuses[15])
+    board += spaceStatuses[11] + space.repeat(1) + spaceStatuses[12] + space.repeat(1) + spaceStatuses[13] + space.repeat(1) + spaceStatuses[14] + space.repeat(1) + spaceStatuses[15]
+
+    return board
   }
 
+  /**
+   * @returns {number} The score
+   * @description Returns the score
+   * @memberof StandardBoard
+   * @method
+   * @name getScore
+   */
   getScore() {
     const emptySpaces = this.getEmptySpaces()
     const occupiedSpaces = 15 - emptySpaces.length
     return occupiedSpaces
+  }
+
+  /**
+   * @returns {string[]} The history of moves
+   * @description Returns the history of moves
+   * @memberof StandardBoard
+   * @method
+   * @name getHistory
+   */
+  getHistory() {
+    return this.history
+  }
+
+  /**
+   * @param {string} move The move to add to the history
+   * @returns {void}
+   * @description Adds a move to the history
+   * @memberof StandardBoard
+   * @method
+   * @name addHistory
+   */
+  addHistory(move) {
+    this.history.push(move)
+  }
+
+  /**
+   * @param {string} move The move to make
+   * @returns {boolean} Whether the move was successful
+   * @description Makes a move while adding it to the history
+   * @memberof StandardBoard
+   * @method
+   * @name move
+   */
+  move(move) {
+    const jumpSpace = this.getSpace(move.jump)
+    const landSpace = this.getSpace(move.land)
+
+    const jump = this.jump(jumpSpace, landSpace)
+    if (!jump) {
+      return false
+    }
+    this.addHistory(this.toString())
+    return true
+  }
+
+  /**
+   * @returns {StandardBoard} The cloned board
+   * @description Clones the board
+   * @memberof StandardBoard
+   * @method
+   * @name clone
+   */
+  clone() {
+    const board = new StandardBoard()
+    board.createBoard()
+
+    const spaces = this.getSpaces()
+
+    // look up each space in the new board and set it to the same occupied status
+    for (const space in spaces) {
+      const newSpace = board.getSpace(space)
+      const oldSpace = spaces[space]
+
+      if (oldSpace.isOccupied()) {
+        board.setOccupied(newSpace)
+      } else {
+        board.setEmpty(newSpace)
+      }
+    }
+
+    return board
   }
 }
 

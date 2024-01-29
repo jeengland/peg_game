@@ -1,5 +1,37 @@
 const { StandardBoard } = require('./src/logic/board');
 
+function runPermutations(board, results = {}) {
+  // get the valid moves
+  const validMoves = board.getValidMoves();
+  // if there are no valid moves, return the results
+  if (validMoves.length === 0) {
+    const score = board.getScore();
+    if (results[score]) {
+      results[score]++;
+    } else {
+      results[score] = 1;
+    }
+    return results;
+  }
+
+  // for each valid move, create a clone of the board and run the permutations
+  validMoves.forEach(move => {
+    const newBoard = board.clone();
+
+    const jump = newBoard.move(move);
+    
+    if (!jump) {
+      console.error('Error jumping');
+      newBoard.printBoard()
+      return;
+    }
+    
+    runPermutations(newBoard, results);
+  });
+
+  return results;
+}
+
 function main() {
   console.log('Peg game initialized')
 
@@ -7,38 +39,8 @@ function main() {
   board.createBoard();
   console.log('Board created')
 
-  let validMoves = board.getValidMoves();
-  console.log('Valid moves generated')
-
-  while (validMoves.length > 0) {
-    const jump = board.jump(validMoves[0].jump, validMoves[0].land);
-
-    // if (!jump) {
-    //   board.printBoard();
-    //   break;
-    // }
-
-    // else {
-    //   board.printBoard();
-    // }
-
-    validMoves = board.getValidMoves();
-  }
-
-  board.printBoard();
-  
-  const score = board.getScore();
-  console.log(`Score: ${score}`);
-
-  if (score === 1) {
-    console.log("You're genius!")
-  } else if (score === 2) {
-    console.log("You're purty smart.")
-  } else if (score === 3) {
-    console.log("You're just plain dumb.")
-  } else {
-    console.log("You're just plain 'eg-no-ra-moose.")
-  }
+  let results = runPermutations(board);
+  console.log(results);
 }
 
 main();
